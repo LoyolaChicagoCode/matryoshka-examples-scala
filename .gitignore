@@ -11,10 +11,10 @@
 # generated files
 bin/
 gen/
+logs/
 proguard_cache/
 target/
 tmp/
-benchmarks.txt
 
 # Local configuration file (sdk path, etc)
 local.properties
@@ -24,7 +24,11 @@ local.properties
 .settings/
 *.iml
 .idea/
+local.sbt
 
 # Emacs files
 *~
 \#*\#
+
+# Mac files
+.DS_Store
