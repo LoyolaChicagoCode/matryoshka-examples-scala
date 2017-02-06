@@ -1,16 +1,18 @@
 package edu.luc.cs.cs372.matryoshka
 
-import scalaz.{ Bifunctor, Functor } // basic typeclasses
+import scalaz.{ Bifunctor, Equal, Functor } // basic typeclasses
 import scalaz.std.anyVal._ // declares basic types as instances of the basic typeclasses
 import scalaz.std.string._ // declares strings as instances of the basic typeclasses
-import scalaz.std.tuple._ // declares tuples as instances of the basic typeclasses
+import scalaz.std.tuple._ // declares tuple as an instance of the basic typeclasses
 import scalaz.std.option._ // declares option as an instance of the basic typeclasses
+import scalaz.syntax.apply._
 import scalaz.syntax.functor._
 import scalaz.syntax.bifunctor._
 
 import scalaz.scalacheck.ScalazProperties._
-import org.scalacheck.{ Arbitrary, Prop, Properties }
+import org.scalacheck.{ Arbitrary, Gen, Prop, Properties }
 import Arbitrary._
+import Gen._
 import Prop.BooleanOperators
 
 import matryoshka._
@@ -33,11 +35,18 @@ object NonEmptyList extends Properties("NonEmptyList") {
    * @tparam A the item type
    * @tparam B the type of the optional rest of the list
    */
-  type NelF[A, B] = (A, Option[B])
+  case class NelF[A, B](head: A, tail: Option[B])
+
+  implicit def equalNelF[A, B] = Equal.equalA[NelF[A, B]]
+
+  implicit def arbitraryNelF[A, B](implicit a: Arbitrary[(A, Option[B])]) = Arbitrary {
+    a.arbitrary.map((NelF[A, B](_, _)).tupled)
+  }
 
   implicit object bifunctorNelF extends Bifunctor[NelF] {
-    override def bimap[A, B, C, D](fab: (A, Option[B]))(f: (A) => C, g: (B) => D) =
-      fab.bimap(f, _.map(g))
+    override def bimap[A, B, C, D](fab: NelF[A, B])(f: (A) => C, g: (B) => D) = fab match {
+      case NelF(h, t) => NelF(f(h), t.map(g))
+    }
   }
 
   property("bifunctorNelF") = bifunctor.laws[NelF]
@@ -45,6 +54,10 @@ object NonEmptyList extends Properties("NonEmptyList") {
   implicit def functorNelF[C]: Functor[NelF[C, ?]] = bifunctorNelF.rightFunctor
 
   property("functorNelF") = functor.laws[NelF[Unit, ?]]
+
+  implicit def nelFEqual[C] = new Delay[Equal, NelF[C, ?]] {
+    def apply[A](eq: Equal[A]) = Equal.equalA[NelF[C, A]]
+  }
 
   /**
    * Least fixpoint of `NelF` in its second parameter `B`
@@ -56,8 +69,8 @@ object NonEmptyList extends Properties("NonEmptyList") {
   type Nel[A] = Fix[NelF[A, ?]]
 
   // factory methods for convenience
-  def point[A](head: A): Nel[A] = Fix[NelF[A, ?]]((head, None: Option[Nel[A]]))
-  def cons[A](head: A, tail: Nel[A]): Nel[A] = Fix[NelF[A, ?]]((head, Some(tail)))
+  def point[A](head: A): Nel[A] = Fix[NelF[A, ?]](NelF(head, None))
+  def cons[A](head: A, tail: Nel[A]): Nel[A] = Fix[NelF[A, ?]](NelF(head, Some(tail)))
 
   // some instances
 
@@ -72,8 +85,8 @@ object NonEmptyList extends Properties("NonEmptyList") {
    * @tparam A generic item type of the algebra
    */
   def length[A]: Algebra[NelF[A, ?], Int] = {
-    case (_, None)    => 1 // end of list:  0
-    case (_, Some(n)) => 1 + n // regular node: add 1 to sum accumulated so far
+    case NelF(_, None)    => 1 // end of list:  0
+    case NelF(_, Some(n)) => 1 + n // regular node: add 1 to sum accumulated so far
   }
 
   property("cataT1") = Prop { RecursiveT[Fix].cataT[NelF[String, ?], Int](list1)(length) == 1 }
@@ -90,8 +103,8 @@ object NonEmptyList extends Properties("NonEmptyList") {
    * but specific item type, also `Int`.
    */
   val sum: Algebra[NelF[Int, ?], Int] = {
-    case (v, None)    => v // end of list:  0
-    case (v, Some(n)) => v + n // regular node: add value to sum accumulated so far
+    case NelF(v, None)    => v // end of list:  0
+    case NelF(v, Some(n)) => v + n // regular node: add value to sum accumulated so far
   }
 
   val list4 = cons(4, cons(3, cons(2, point(1))))
