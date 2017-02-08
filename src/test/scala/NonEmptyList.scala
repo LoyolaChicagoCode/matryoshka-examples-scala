@@ -9,6 +9,7 @@ import scalaz.syntax.apply._
 import scalaz.syntax.functor._
 import scalaz.syntax.bifunctor._
 
+import scalaz.scalacheck.ScalaCheckBinding._
 import scalaz.scalacheck.ScalazProperties._
 import org.scalacheck.{ Arbitrary, Gen, Prop, Properties }
 import Arbitrary._
@@ -26,9 +27,6 @@ import matryoshka.scalacheck.arbitrary._
  */
 object NonEmptyList extends Properties("NonEmptyList") {
 
-  /** Required to resolve the ambiguity between RecursiveT and BirecursiveT. */
-  implicit def fixBirecursive(implicit r: BirecursiveT[Fix]) = matryoshka.birecursiveTBirecursive(r)
-
   /**
    * A node in a non-empty list.
    *
@@ -39,25 +37,31 @@ object NonEmptyList extends Properties("NonEmptyList") {
 
   implicit def equalNelF[A, B] = Equal.equalA[NelF[A, B]]
 
-  implicit def arbitraryNelF[A, B](implicit a: Arbitrary[(A, Option[B])]) = Arbitrary {
-    a.arbitrary.map((NelF[A, B](_, _)).tupled)
+  implicit def nelFArbitraryD[C](implicit c: Arbitrary[C]) = new Delay[Arbitrary, NelF[C, ?]] {
+    override def apply[A](a: Arbitrary[A]) = Arbitrary {
+      (c.arbitrary ⊛ option(a.arbitrary))(NelF[C, A](_, _))
+    }
   }
 
-  implicit object bifunctorNelF extends Bifunctor[NelF] {
+  // tests of equality laws for `NelF`
+  include(equal.laws[NelF[Unit, Unit]], "equalNelF.")
+  include(equal.laws[NelF[Unit, NelF[Unit, Unit]]], "equalNelF2.")
+
+  implicit def nelFEqualD[C] = new Delay[Equal, NelF[C, ?]] {
+    override def apply[A](eq: Equal[A]) = Equal.equalA[NelF[C, A]]
+  }
+
+  implicit object nelFBifunctor extends Bifunctor[NelF] {
     override def bimap[A, B, C, D](fab: NelF[A, B])(f: (A) => C, g: (B) => D) = fab match {
       case NelF(h, t) => NelF(f(h), t.map(g))
     }
   }
 
-  property("bifunctorNelF") = bifunctor.laws[NelF]
+  include(bifunctor.laws[NelF], "bifunctorNelF.")
 
-  implicit def functorNelF[C]: Functor[NelF[C, ?]] = bifunctorNelF.rightFunctor
+  implicit def nelFFunctor[C]: Functor[NelF[C, ?]] = nelFBifunctor.rightFunctor
 
-  property("functorNelF") = functor.laws[NelF[Unit, ?]]
-
-  implicit def nelFEqual[C] = new Delay[Equal, NelF[C, ?]] {
-    def apply[A](eq: Equal[A]) = Equal.equalA[NelF[C, A]]
-  }
+  include(functor.laws[NelF[Unit, ?]], "functorNelF.")
 
   /**
    * Least fixpoint of `NelF` in its second parameter `B`
@@ -67,6 +71,8 @@ object NonEmptyList extends Properties("NonEmptyList") {
    * @tparam A item type of the resulting carrier object
    */
   type Nel[A] = Fix[NelF[A, ?]]
+
+  include(equal.laws[Nel[Unit]], "equalNel.")
 
   // factory methods for convenience
   def point[A](head: A): Nel[A] = Fix[NelF[A, ?]](NelF(head, None))
@@ -89,14 +95,10 @@ object NonEmptyList extends Properties("NonEmptyList") {
     case NelF(_, Some(n)) => 1 + n // regular node: add 1 to sum accumulated so far
   }
 
-  property("cataT1") = Prop { RecursiveT[Fix].cataT[NelF[String, ?], Int](list1)(length) == 1 }
-  property("cataT3") = Prop { RecursiveT[Fix].cataT[NelF[String, ?], Int](list3)(length) == 3 }
-
   // now we can fold the length algebra into instances.
 
-  // FIXME get these to work
-  // property("cataT1") = Prop { list1.cata(length) == 1 }
-  // property("cataT3") = Prop { list3.cata(length) == 3 }
+  property("cataT1") = Prop { list1.cata(length) == 1 }
+  property("cataT3") = Prop { list3.cata(length) == 3 }
 
   /**
    * Nongeneric `NelF[Int, ?]`-algebra for carrier object `Int`
@@ -109,10 +111,7 @@ object NonEmptyList extends Properties("NonEmptyList") {
 
   val list4 = cons(4, cons(3, cons(2, point(1))))
 
-  property("cataT4") = Prop { RecursiveT[Fix].cataT[NelF[Int, ?], Int](list4)(sum) == 10 }
-
-  // FIXME get this to work
-  // property("cataT4a") = Prop { list4.cata(sum) == 10 }
+  property("cataT4a") = Prop { list4.cata(sum) == 10 }
 
   /**
    * Generic `Option`-coalgebra for carrier object `Int` in category Scala types.
