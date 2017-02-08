@@ -35,21 +35,18 @@ object NonEmptyList extends Properties("NonEmptyList") {
    */
   case class NelF[A, B](head: A, tail: Option[B])
 
-  implicit def equalNelF[A, B] = Equal.equalA[NelF[A, B]]
-
   implicit def nelFArbitraryD[C](implicit c: Arbitrary[C]) = new Delay[Arbitrary, NelF[C, ?]] {
     override def apply[A](a: Arbitrary[A]) = Arbitrary {
       (c.arbitrary ⊛ option(a.arbitrary))(NelF[C, A](_, _))
     }
   }
 
-  // tests of equality laws for `NelF`
-  include(equal.laws[NelF[Unit, Unit]], "equalNelF.")
-  include(equal.laws[NelF[Unit, NelF[Unit, Unit]]], "equalNelF2.")
-
   implicit def nelFEqualD[C] = new Delay[Equal, NelF[C, ?]] {
     override def apply[A](eq: Equal[A]) = Equal.equalA[NelF[C, A]]
   }
+
+  include(equal.laws[NelF[Unit, Unit]], "equalNelF.")
+  include(equal.laws[NelF[Unit, NelF[Unit, Unit]]], "equalNelF2.")
 
   implicit object nelFBifunctor extends Bifunctor[NelF] {
     override def bimap[A, B, C, D](fab: NelF[A, B])(f: (A) => C, g: (B) => D) = fab match {
@@ -75,6 +72,7 @@ object NonEmptyList extends Properties("NonEmptyList") {
   include(equal.laws[Nel[Unit]], "equalNel.")
 
   // factory methods for convenience
+
   def point[A](head: A): Nel[A] = Fix[NelF[A, ?]](NelF(head, None))
   def cons[A](head: A, tail: Nel[A]): Nel[A] = Fix[NelF[A, ?]](NelF(head, Some(tail)))
 
@@ -116,15 +114,14 @@ object NonEmptyList extends Properties("NonEmptyList") {
   /**
    * Generic `Option`-coalgebra for carrier object `Int` in category Scala types.
    */
-  val downFrom: Coalgebra[Option, Int] = (n: Int) => {
+  val downFrom: Coalgebra[NelF[Int, ?], Int] = (n: Int) => {
     require { n >= 0 }
-    if (n == 0) None /* 0: end of list */
-    else Some(n / 2) /* > 0: create node for n and continue with n / 2 */
+    if (n == 0) NelF(0, None) /* 0: end of list */
+    else NelF(n, Some(n / 2)) /* > 0: create node for n and continue with n / 2 */
   }
 
   // Now we can create instances by unfolding the coalgebra from a starting value.
 
-  // FIXME get these to work
-  // property("ana1") = Prop { 1.ana[Nel[Int]](downFrom).cata(length) == 1 }
-  // property("ana8") = Prop { 8.ana[Nel[Int]](downFrom).cata(length) == 4 }
+  property("ana1") = Prop { 1.ana[Nel[Int]](downFrom).cata(length) == 2 }
+  property("ana8") = Prop { 8.ana[Nel[Int]](downFrom).cata(length) == 5 }
 }
