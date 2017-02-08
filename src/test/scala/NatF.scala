@@ -1,10 +1,21 @@
-import scalaz.{ Equal, Functor, Show }
-import scalaz.std.anyVal._     // for assert_=== to work on basic values
-import scalaz.syntax.equal._   // for assert_===
+package edu.luc.cs.cs372.matryoshka
 
-import scalamu._                // algebra types and injected cata method
+import scalaz.{ Equal, Functor }
+import scalaz.std.anyVal._ // declares basic types as instances of the basic typeclasses
 
-/*
+import scalaz.scalacheck.ScalaCheckBinding._
+import scalaz.scalacheck.ScalazProperties._
+import org.scalacheck.{ Arbitrary, Gen, Prop, Properties }
+import Arbitrary._
+import Gen._
+import Prop.BooleanOperators
+
+import matryoshka._
+import matryoshka.implicits._
+import matryoshka.data.Fix
+import matryoshka.scalacheck.arbitrary._
+
+/**
  * In this example, we represent natural numbers
  * essentially as lists without item values:
  *
@@ -13,123 +24,160 @@ import scalamu._                // algebra types and injected cata method
  *
  * We can then define operations such as addition on these.
  */
+object NatF extends Properties("NatF") {
 
-/**
- * Endofunctor for (non-generic) F-algebra in the category Scala types:
- * {{{
- * data NatF[+A] = Zero | Succ(n: A)
- * }}}
- * @tparam A argument (type parameter) of the endofunctor
- */
-sealed trait NatF[+A]
-case object Zero extends NatF[Nothing]
-case class Succ[+A](n: A) extends NatF[A]
+  /**
+   * Endofunctor for (non-generic) F-algebra in the category Scala types:
+   * {{{
+   * data NatF[+A] = Zero | Succ(n: A)
+   * }}}
+   *
+   * @tparam A argument (type parameter) of the endofunctor
+   */
+  sealed trait NatF[+A]
 
-/**
- * Implicit value for declaring `NatF` as an instance of
- * typeclass `Functor` in scalaz.
- */
-implicit val natFFunctor = new Functor[NatF] {
-  def map[A, B](fa: NatF[A])(f: A => B): NatF[B] = fa match {
-    case Zero    => Zero: NatF[B]
-    case Succ(n) => Succ(f(n))
+  case object Zero extends NatF[Nothing]
+
+  case class Succ[+A](n: A) extends NatF[A]
+
+  /**
+   * Implicit value for declaring `NatF` as an instance of
+   * typeclass `Functor` in scalaz.
+   */
+  implicit val natFFunctor = new Functor[NatF] {
+    override def map[A, B](fa: NatF[A])(f: A => B): NatF[B] = fa match {
+      case Zero    => Zero: NatF[B]
+      case Succ(n) => Succ(f(n))
+    }
   }
+
+  /**
+   * Required for equality on `NatF` to extend to `Fix[NatF]`
+   * and related recursive types.
+   */
+  implicit object natFEqualD extends Delay[Equal, NatF] {
+    override def apply[A](eq: Equal[A]) = Equal.equalA[NatF[A]]
+  }
+
+  implicit object natFArbitraryD extends Delay[Arbitrary, NatF] {
+    override def apply[A](a: Arbitrary[A]) = Arbitrary {
+      oneOf(const(Zero), a.arbitrary.map(Succ(_)))
+    }
+  }
+
+  // tests of equality and functor laws for `NatF`
+  include(equal.laws[NatF[Unit]], "equalNatF.")
+  include(equal.laws[NatF[NatF[Unit]]], "equalNatF2.")
+  include(functor.laws[NatF], "functorNatF.")
+
+  /**
+   * Least fixpoint of `NatF` (recursive type based on `NatF`)
+   * as carrier object for initial algebra.
+   */
+  type Nat = Fix[NatF]
+
+  include(equal.laws[Nat], "equalNat.")
+
+  // Factory methods for convenience.
+  val zero = Fix[NatF](Zero)
+  val succ = (n: Nat) => Fix[NatF](Succ(n))
+
+  // some instances
+  val one = succ(zero)
+  val two = succ(one)
+  val three = succ(two)
+
+  /**
+   * Conversion to `Int` as an `NatF`-algebra
+   * for carrier object `Int` in the category Scala types.
+   */
+  val toInt: Algebra[NatF, Int] = {
+    case Zero    => 0
+    case Succ(n) => n + 1
+  }
+
+  // Using the catamorphism, we now can fold the `toInt` algebra into instances.
+  // (This is an example of recursion.)
+  property("cata0") = Prop { zero.cata(toInt) == 0 }
+  property("cata3") = Prop { three.cata(toInt) == 3 }
+
+  /**
+   * Conversion from `Int` as an `NatF`-coalgebra
+   * for carrier object `Int` in category Scala types
+   * (generator for corecursion).
+   */
+  val fromInt: Coalgebra[NatF, Int] = (n: Int) => {
+    require {
+      n >= 0
+    }
+    if (n == 0) Zero
+    else Succ(n - 1)
+  }
+
+  // Using the anamorphism on a coalgebra such as `fromInt`,
+  // we can now unfold a `Nat` from an `Int`.
+  // (This is an example of corecursion.)
+  property("ana0") = Prop { 0.ana[Nat](fromInt).cata(toInt) == 0 }
+  property("ana7") = Prop { 7.ana[Nat](fromInt).cata(toInt) == 7 }
+  property("anaForall") = Prop.forAll { i: Int => (i >= 0 && i < 10000) ==> (i.ana[Nat](fromInt).cata(toInt) == i) }
+
+  /**
+   * Addition to a number `m` as an `NatF`-algebra for carrier object
+   * `Nat` in the category Scala types.
+   *
+   * @param m the number to which we are adding the argument of the algebra
+   */
+  val plus: Nat => Algebra[NatF, Nat] = m => {
+    case Zero    => m
+    case Succ(n) => succ(n)
+  }
+
+  property("cata00") = Prop { zero.cata(plus(zero)).cata(toInt) == 0 }
+  property("cata03") = Prop { zero.cata(plus(three)).cata(toInt) == 3 }
+  property("cata30") = Prop { three.cata(plus(zero)).cata(toInt) == 3 }
+  property("cata23") = Prop { two.cata(plus(three)).cata(toInt) == 5 }
+
+  /**
+   * Multiplication by a number `m` as an `NatF`-algebra for carrier object
+   * `Nat` in the category Scala types.
+   *
+   * @param m the number to which we are adding the argument of the algebra
+   */
+  val times: Nat => Algebra[NatF, Nat] = m => {
+    case Zero    => zero
+    case Succ(n) => n.cata(plus(m))
+  }
+
+  property("cataOnTimes00") = Prop { zero.cata(times(zero)).cata(toInt) == 0 }
+  property("cataOnTimes03") = Prop { zero.cata(times(three)).cata(toInt) == 0 }
+  property("cataOnTimes30") = Prop { three.cata(times(zero)).cata(toInt) == 0 }
+  property("cataOnTimes23") = Prop { two.cata(times(three)).cata(toInt) == 6 }
+
+  /**
+   * Argument function for `para`. Returns `one` when there is no accumulated
+   * result yet. Otherwise it multiplies the accumulated result by the current
+   * receiver value during traversal, whose tail (out) is passed as `curr` by
+   * `para`.
+   * By contrast, F-algebras do not have access to the current receiver value
+   * during traversal!
+   * Exercise: This has a similar type signature as `plus` and `times`. What
+   * are the key differences?
+   *
+   * @param curr the tail of the current receiver value
+   * @return the current receiver times the accumulated result
+   */
+  def oneOrTimes(curr: NatF[Nat]): Algebra[NatF, Nat] = {
+    case Zero      => one
+    case Succ(acc) => Fix[NatF](curr).cata(times(acc))
+  }
+
+  property("oneOrTimes20") = Prop { oneOrTimes(Succ(two))(Zero).cata(toInt) == 1 }
+  property("oneOrTimes03") = Prop { oneOrTimes(Zero) (Succ(three)).cata(toInt) == 0 }
+  property("oneOrTimes12") = Prop { oneOrTimes(Succ(one))(Succ(two)).cata(toInt) == 4 }
+  property("oneOrTimes23") = Prop { oneOrTimes(Succ(two))(Succ(three)).cata(toInt) == 9 }
+
+  // TODO table-driven property test
+  //  (0 to 5) zip Seq(1, 1, 2, 6, 24, 120) foreach { case (arg, result) =>
+  //    µ.unfold(arg)(fromInt) para oneOrTimes cata toInt assert_=== result
+  //  }
 }
-
-/** Declaration of `NatF` as an instance of `Equal`. */
-implicit def natFEqual[A](implicit aEqual: Equal[A]): Equal[NatF[A]] = Equal.equal {
-  case (Succ(n), Succ(m)) => aEqual.equal(n, m)
-  case (Zero,    Zero)    => true
-  case _                  => false
-}
-
-/**
- * Least fixpoint of `NatF` (recursive type based on `NatF`)
- * as carrier object for initial algebra.
- */
-type Nat = µ[NatF]
-
-// Factory methods for convenience.
-val zero = In[NatF](Zero)
-val succ = (n: Nat) => In[NatF](Succ(n))
-
-// some instances
-val one   = succ(zero)
-val two   = succ(one)
-val three = succ(two)
-
-/**
- * Conversion to `Int` as an `NatF`-algebra
- * for carrier object `Int` in the category Scala types.
- */
-val toInt: Algebra[NatF, Int] = {
-  case Zero    => 0
-  case Succ(n) => n + 1
-}
-
-// now we can fold the `toInt` algebra into instances
-zero  cata toInt assert_=== 0
-three cata toInt assert_=== 3
-
-/**
- * Conversion from `Int` as an `NatF`-coalgebra
- * for carrier object `Int` in category Scala types
- * (generator for corecursion).
- */
-val fromInt: Coalgebra[NatF, Int] = (n: Int) => {
-  require { n >= 0 }
-  if   (n == 0) Zero
-  else          Succ(n - 1)
-}
-
-/*
- * Unfold is an anamorphism for unfolding a Nat from a coalgebra
- * such as `fromInt`. This is an example of corecursion.
- *
- * We need to convert the item values back to Unit before applying toInt
- * because Cofree is generic in the item type and preserves it.
- * To avoid this, we would need a non-generic version of Cofree.
- */
-µ.unfold(0)(fromInt) cata toInt assert_=== 0
-µ.unfold(7)(fromInt) cata toInt assert_=== 7
-
-/**
- * Addition to a number `m` as an `NatF`-algebra for carrier object
- * `Nat` in the category Scala types.
- *
- * @param m the number to which we are adding the argument of the algebra
- */
-val plus: Nat => Algebra[NatF, Nat] = m => {
-  case Zero    => m
-  case Succ(n) => succ(n)
-}
-
-zero  cata plus(zero)  cata toInt assert_=== 0
-zero  cata plus(three) cata toInt assert_=== 3
-three cata plus(zero)  cata toInt assert_=== 3
-two   cata plus(three) cata toInt assert_=== 5
-
-// structural equality should now work
-(Zero: NatF[Unit]) assert_=== (Zero: NatF[Unit])
-(Succ(Zero): NatF[NatF[Unit]]) assert_=== Succ(Zero)
-assert { (Succ(Zero): NatF[NatF[Unit]]) =/= Zero }
-zero assert_=== zero
-three assert_=== succ(succ(succ(zero)))
-assert { three =/= zero }
-
-// imports required for checking equality and functor laws
-// using Scalaz's ScalaCheck bindings
-import scalaz.syntax.functor._
-import scalaz.scalacheck.ScalazArbitrary._
-import scalaz.scalacheck.ScalaCheckBinding._
-import scalaz.scalacheck.ScalazProperties._
-import org.scalacheck.Arbitrary
-
-implicit def natFArbitrary[A](implicit a: Arbitrary[A]): Arbitrary[NatF[A]] =
-  a map { a => (Succ(a): NatF[A]) }
-
-// the equality and functor laws should both hold
-equal.laws[NatF[Int]].check
-functor.laws[NatF].check
-
-println("■")
