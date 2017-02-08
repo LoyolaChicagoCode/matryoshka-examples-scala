@@ -1,6 +1,6 @@
 package edu.luc.cs.cs372.matryoshka
 
-import scalaz.{ Equal }
+import scalaz.Equal
 import scalaz.std.option._ // declares option as an instance of the basic typeclasses
 import scalaz.std.anyVal._ // declares basic types as instances of the basic typeclasses
 
@@ -25,9 +25,6 @@ import matryoshka.scalacheck.arbitrary._
  */
 object NatOption extends Properties("NatOption") {
 
-  /** Required to resolve the ambiguity between RecursiveT and BirecursiveT. */
-  implicit def fixBirecursive(implicit r: BirecursiveT[Fix]) = matryoshka.birecursiveTBirecursive(r)
-
   /*
    * A (nongeneric) F-algebra in the category Scala types:
    * we use the predefined Option[_] endofunctor
@@ -41,6 +38,20 @@ object NatOption extends Properties("NatOption") {
    * (recursive type based on `Option`).
    */
   type Nat = Fix[Option]
+
+  /**
+   * Required for equality on `Option` to extend to `Fix[Option]`
+   * and related recursive types.
+   */
+  implicit object optionEqualD extends Delay[Equal, Option] {
+    override def apply[A](eq: Equal[A]) = Equal.equalA[Option[A]]
+  }
+
+  // tests of equality and functor laws for `Option` and `Nat`
+  include(equal.laws[Option[Unit]], "equalOption.")
+  include(equal.laws[Option[Option[Unit]]], "equalOption2.")
+  include(equal.laws[Nat], "equalNat.")
+  include(functor.laws[Option], "functorOption")
 
   // factory methods for convenience.
   val zero = Fix[Option](None)
@@ -100,14 +111,6 @@ object NatOption extends Properties("NatOption") {
   property("cata23") = Prop { two.cata(plus(three)).cata(toInt) == 5 }
 
   /**
-   * Required for equality on `Option` to extend to `Fix[Option]`
-   * and related recursive types.
-   */
-  implicit object optionEqual extends Delay[Equal, Option] {
-    def apply[A](eq: Equal[A]) = Equal.equalA[Option[A]]
-  }
-
-  /**
    * Multiplication by a number `m` as an `Option`-algebra for carrier object
    * `Nat` in the category Scala types.
    *
@@ -150,10 +153,4 @@ object NatOption extends Properties("NatOption") {
   //  (0 to 5) zip Seq(1, 1, 2, 6, 24, 120) foreach { case (arg, result) =>
   //    µ.unfold(arg)(fromInt) para oneOrTimes cata toInt assert_=== result
   //  }
-
-  // tests of equality and functor laws for `Option` and `Nat`
-  property("equalsOptionInt") = equal.laws[Option[Int]]
-  property("equalsOptionOptionInt") = equal.laws[Option[Option[Int]]]
-  property("equalsNat") = equal.laws[Nat]
-  property("functorOption") = functor.laws[Option]
 }
