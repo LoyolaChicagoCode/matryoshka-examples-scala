@@ -14,7 +14,6 @@ import scalaz.scalacheck.ScalazProperties._
 import org.scalacheck.{ Arbitrary, Gen, Prop, Properties }
 import Arbitrary._
 import Gen._
-import Prop.BooleanOperators
 
 import matryoshka._
 import matryoshka.implicits._
