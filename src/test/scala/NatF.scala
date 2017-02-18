@@ -7,7 +7,6 @@ import scalaz.scalacheck.ScalaCheckBinding._
 import scalaz.scalacheck.ScalazProperties._
 import org.scalacheck.{ Arbitrary, Gen, Prop, Properties }
 import Arbitrary._
-import Gen._
 import Prop.BooleanOperators
 
 import matryoshka._
@@ -29,24 +28,24 @@ object NatF extends Properties("NatF") {
   /**
    * Endofunctor for (non-generic) F-algebra in the category Scala types:
    * {{{
-   * data NatF[+A] = Zero | Succ(n: A)
+   * data NatF[+T] = Zero | Succ(n: T)
    * }}}
    *
-   * @tparam A argument (type parameter) of the endofunctor
+   * @tparam T argument (type parameter) of the endofunctor
    */
-  sealed trait NatF[+A]
+  sealed trait NatF[+T]
 
   case object Zero extends NatF[Nothing]
 
-  case class Succ[+A](n: A) extends NatF[A]
+  case class Succ[+T](n: T) extends NatF[T]
 
   /**
    * Implicit value for declaring `NatF` as an instance of
    * typeclass `Functor` in scalaz.
    */
   implicit val natFFunctor = new Functor[NatF] {
-    override def map[A, B](fa: NatF[A])(f: A => B): NatF[B] = fa match {
-      case Zero    => Zero: NatF[B]
+    override def map[T, U](fa: NatF[T])(f: T => U): NatF[U] = fa match {
+      case Zero    => Zero: NatF[U]
       case Succ(n) => Succ(f(n))
     }
   }
@@ -56,11 +55,12 @@ object NatF extends Properties("NatF") {
    * and related recursive types.
    */
   implicit object natFEqualD extends Delay[Equal, NatF] {
-    override def apply[A](eq: Equal[A]) = Equal.equalA[NatF[A]]
+    override def apply[T](eq: Equal[T]) = Equal.equalA[NatF[T]]
   }
 
   implicit object natFArbitraryD extends Delay[Arbitrary, NatF] {
-    override def apply[A](a: Arbitrary[A]) = Arbitrary {
+    override def apply[T](a: Arbitrary[T]) = Arbitrary {
+      import Gen._
       oneOf(const(Zero), a.arbitrary.map(Succ(_)))
     }
   }
@@ -98,8 +98,8 @@ object NatF extends Properties("NatF") {
 
   // Using the catamorphism, we now can fold the `toInt` algebra into instances.
   // (This is an example of recursion.)
-  property("cata0") = Prop { zero.cata(toInt) == 0 }
-  property("cata3") = Prop { three.cata(toInt) == 3 }
+  property("cata0") = Prop { (zero cata toInt) == 0 }
+  property("cata3") = Prop { (three cata toInt) == 3 }
 
   /**
    * Conversion from `Int` as an `NatF`-coalgebra
@@ -107,9 +107,7 @@ object NatF extends Properties("NatF") {
    * (generator for corecursion).
    */
   val fromInt: Coalgebra[NatF, Int] = (n: Int) => {
-    require {
-      n >= 0
-    }
+    require (n >= 0)
     if (n == 0) Zero
     else Succ(n - 1)
   }
@@ -117,9 +115,9 @@ object NatF extends Properties("NatF") {
   // Using the anamorphism on a coalgebra such as `fromInt`,
   // we can now unfold a `Nat` from an `Int`.
   // (This is an example of corecursion.)
-  property("ana0") = Prop { 0.ana[Nat](fromInt).cata(toInt) == 0 }
-  property("ana7") = Prop { 7.ana[Nat](fromInt).cata(toInt) == 7 }
-  property("anaForall") = Prop.forAll { i: Int => (i >= 0 && i < 10000) ==> (i.ana[Nat](fromInt).cata(toInt) == i) }
+  property("ana0") = Prop { (0 ana[Nat] fromInt cata toInt) == 0 }
+  property("ana7") = Prop { (7 ana[Nat] fromInt cata toInt) == 7 }
+  property("anaForall") = Prop.forAll { i: Int => (i >= 0 && i < 100) ==> ((i ana[Nat] fromInt cata toInt) == i) }
 
   /**
    * Addition to a number `m` as an `NatF`-algebra for carrier object
@@ -132,10 +130,10 @@ object NatF extends Properties("NatF") {
     case Succ(n) => succ(n)
   }
 
-  property("cata00") = Prop { zero.cata(plus(zero)).cata(toInt) == 0 }
-  property("cata03") = Prop { zero.cata(plus(three)).cata(toInt) == 3 }
-  property("cata30") = Prop { three.cata(plus(zero)).cata(toInt) == 3 }
-  property("cata23") = Prop { two.cata(plus(three)).cata(toInt) == 5 }
+  property("cata00") = Prop { (zero cata plus(zero) cata toInt) == 0 }
+  property("cata03") = Prop { (zero cata plus(three) cata toInt) == 3 }
+  property("cata30") = Prop { (three cata plus(zero) cata toInt) == 3 }
+  property("cata23") = Prop { (two cata plus(three) cata toInt) == 5 }
 
   /**
    * Multiplication by a number `m` as an `NatF`-algebra for carrier object
@@ -148,10 +146,10 @@ object NatF extends Properties("NatF") {
     case Succ(n) => n.cata(plus(m))
   }
 
-  property("cataOnTimes00") = Prop { zero.cata(times(zero)).cata(toInt) == 0 }
-  property("cataOnTimes03") = Prop { zero.cata(times(three)).cata(toInt) == 0 }
-  property("cataOnTimes30") = Prop { three.cata(times(zero)).cata(toInt) == 0 }
-  property("cataOnTimes23") = Prop { two.cata(times(three)).cata(toInt) == 6 }
+  property("cataOnTimes00") = Prop { (zero cata times(zero) cata toInt) == 0 }
+  property("cataOnTimes03") = Prop { (zero cata times(three) cata toInt) == 0 }
+  property("cataOnTimes30") = Prop { (three cata times(zero) cata toInt) == 0 }
+  property("cataOnTimes23") = Prop { (two cata times(three) cata toInt) == 6 }
 
   /**
    * Argument function for `para`. Returns `one` when there is no accumulated
@@ -168,13 +166,13 @@ object NatF extends Properties("NatF") {
    */
   def oneOrTimes(curr: NatF[Nat]): Algebra[NatF, Nat] = {
     case Zero      => one
-    case Succ(acc) => Fix[NatF](curr).cata(times(acc))
+    case Succ(acc) => Fix[NatF](curr) cata times(acc)
   }
 
-  property("oneOrTimes20") = Prop { oneOrTimes(Succ(two))(Zero).cata(toInt) == 1 }
-  property("oneOrTimes03") = Prop { oneOrTimes(Zero) (Succ(three)).cata(toInt) == 0 }
-  property("oneOrTimes12") = Prop { oneOrTimes(Succ(one))(Succ(two)).cata(toInt) == 4 }
-  property("oneOrTimes23") = Prop { oneOrTimes(Succ(two))(Succ(three)).cata(toInt) == 9 }
+  property("oneOrTimes20") = Prop { (oneOrTimes(Succ(two))(Zero) cata toInt) == 1 }
+  property("oneOrTimes03") = Prop { (oneOrTimes(Zero) (Succ(three)) cata toInt) == 0 }
+  property("oneOrTimes12") = Prop { (oneOrTimes(Succ(one))(Succ(two)) cata toInt) == 4 }
+  property("oneOrTimes23") = Prop { (oneOrTimes(Succ(two))(Succ(three)) cata toInt) == 9 }
 
   // TODO table-driven property test
   //  (0 to 5) zip Seq(1, 1, 2, 6, 24, 120) foreach { case (arg, result) =>
