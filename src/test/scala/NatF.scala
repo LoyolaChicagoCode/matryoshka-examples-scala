@@ -45,7 +45,7 @@ object NatF extends Properties("NatF") {
    */
   implicit val natFFunctor = new Functor[NatF] {
     override def map[T, U](fa: NatF[T])(f: T => U): NatF[U] = fa match {
-      case Zero    => Zero: NatF[U]
+      case Zero    => Zero
       case Succ(n) => Succ(f(n))
     }
   }
@@ -61,7 +61,7 @@ object NatF extends Properties("NatF") {
   implicit object natFArbitraryD extends Delay[Arbitrary, NatF] {
     override def apply[T](a: Arbitrary[T]) = Arbitrary {
       import Gen._
-      oneOf(const(Zero), a.arbitrary.map(Succ(_)))
+      oneOf(const(Zero), a.arbitrary map (Succ(_)))
     }
   }
 
@@ -107,7 +107,7 @@ object NatF extends Properties("NatF") {
    * (generator for corecursion).
    */
   val fromInt: Coalgebra[NatF, Int] = (n: Int) => {
-    require (n >= 0)
+    require { n >= 0 }
     if (n == 0) Zero
     else Succ(n - 1)
   }

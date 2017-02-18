@@ -82,7 +82,7 @@ object NatOption extends Properties("NatOption") {
    * (generator for corecursion).
    */
   val fromInt: Coalgebra[Option, Int] = n => {
-    require (n >= 0)
+    require { n >= 0 }
     if (n == 0) None
     else Some(n - 1)
   }
