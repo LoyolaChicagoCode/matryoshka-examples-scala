@@ -43,7 +43,7 @@ object NatF extends Properties("NatF") {
    * Implicit value for declaring `NatF` as an instance of
    * typeclass `Functor` in scalaz.
    */
-  implicit val natFFunctor = new Functor[NatF] {
+  implicit object natFFunctor extends Functor[NatF] {
     override def map[T, U](fa: NatF[T])(f: T => U): NatF[U] = fa match {
       case Zero    => Zero
       case Succ(n) => Succ(f(n))
