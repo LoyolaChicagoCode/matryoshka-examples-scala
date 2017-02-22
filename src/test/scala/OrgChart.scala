@@ -109,12 +109,12 @@ object OrgChart extends Properties("OrgChart") {
 
   property("cataSize") = Prop { (org cata size) == 7 }
 
-  def depth[H]: Algebra[NodeF[H, ?], Int] = {
+  def height[H]: Algebra[NodeF[H, ?], Int] = {
     case NodeF(_, Nil) => 1
     case NodeF(_, cs)  => 1 + cs.max
   }
 
-  property("cataDepth") = Prop { (org cata depth) == 3 }
+  property("cataHeight") = Prop { (org cata height) == 3 }
 
   def incBy(perc: Float)(num: Int): Int = scala.math.round(num.toFloat * (100 + perc) / 100)
 
