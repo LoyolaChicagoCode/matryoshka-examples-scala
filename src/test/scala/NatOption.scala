@@ -136,18 +136,17 @@ object NatOption extends Properties("NatOption") {
    * Exercise: This has a similar type signature as `plus` and `times`. What
    * are the key differences?
    *
-   * @param curr the tail of the current receiver value
    * @return the current receiver times the accumulated result
    */
-  def oneOrTimes(curr: Option[Nat]): Algebra[Option, Nat] = {
-    case None      => one
-    case Some(acc) => Fix(curr) cata times(acc)
+  val oneOrTimes: GAlgebra[(Nat, ?), Option, Nat] = {
+    case None              => one
+    case Some((curr, acc)) => succ(curr) cata times(acc)
   }
 
-  property("oneOrTimes20") = Prop { (oneOrTimes(Some(two))(None) cata toInt) == 1 }
-  property("oneOrTimes03") = Prop { (oneOrTimes(None)(Some(three)) cata toInt) == 0 }
-  property("oneOrTimes12") = Prop { (oneOrTimes(Some(one))(Some(two)) cata toInt) == 4 }
-  property("oneOrTimes23") = Prop { (oneOrTimes(Some(two))(Some(three)) cata toInt) == 9 }
+  property("oneOrTimes20")    = Prop { (oneOrTimes(None) cata toInt) == 1 }
+  property("oneOrTimes12")    = Prop { (oneOrTimes(Some(one, two)) cata toInt) == 4 }
+  property("oneOrTimes23")    = Prop { (oneOrTimes(Some(two, three)) cata toInt) == 9 }
+  property("paraOneOrTImes3") = Prop { (three para oneOrTimes cata toInt) == 6 }
 
   // TODO table-driven property test
   //  (0 to 5) zip Seq(1, 1, 2, 6, 24, 120) foreach { case (arg, result) =>
