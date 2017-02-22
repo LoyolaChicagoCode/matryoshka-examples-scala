@@ -1,8 +1,14 @@
+package edu.luc.cs.cs372.matryoshka
+
 import scalaz.Functor
-import scalaz.std.anyVal._     // for assert_=== to work on basic values
 import scalaz.std.option._
-import scalaz.syntax.equal._   // for assert_===
-import scalamu._               // algebra types and injected cata method
+
+import scalaz.scalacheck.ScalazProperties._
+import org.scalacheck.{ Prop, Properties }
+
+import matryoshka._
+import matryoshka.implicits._
+import matryoshka.data.Fix
 
 /*
  * In this example, we demonstrate that we can unify the natf and natoption
@@ -10,7 +16,7 @@ import scalamu._               // algebra types and injected cata method
  * of a given endofunctor.
  *
  * As a result, we can avoid the duplication of essentially equivalent code
- * between natf and natoption!
+ * between NatF and NatOption!
  */
 
 /**
@@ -22,7 +28,7 @@ import scalamu._               // algebra types and injected cata method
 trait FInitial[F[+_]] {
 
   /** The zero constructor. */
-  val z: F[Nothing]
+  def z: F[Nothing]
 
   /** The successor constructor. */
   def s[A]: A => F[A]
@@ -40,17 +46,17 @@ trait FInitial[F[+_]] {
 }
 
 /**
- * A common abstraction over the code in the `natf` and `natoption`
- * example worksheets made possible by the `FInitial` abstraction.
- *
- * @tparam F the endofunctor we are going to examine
- * @param fi the initial algebra of the endofunctor
- */
-def test[F[+_]](fi: FInitial[F]): Unit = {
+  * A common abstraction over the code in the `natf` and `natoption`
+  * example worksheets made possible by the `FInitial` abstraction.
+  *
+  * @tparam F the endofunctor we are going to examine
+  */
+abstract class FInitialTest[F[+_]](fi: FInitial[F]) extends Properties("NatHigherKinded") {
+
   import fi._
 
-  val zero: µ[F] = In[F](z)
-  val succ: µ[F] => µ[F] = n => In[F](s(n))
+  val zero: Fix[F]           = Fix[F](z)
+  val succ: Fix[F] => Fix[F] = n => Fix[F](s(n))
 
   val one   = succ(zero)
   val two   = succ(one)
@@ -61,11 +67,8 @@ def test[F[+_]](fi: FInitial[F]): Unit = {
     case Some(n) => n + 1
   }
 
-  // unsure why this works only when applied to `F`
-  implicit val enableCata = ToMuOps[F] _
-
-  zero cata toInt assert_=== 0
-  three cata toInt assert_=== 3
+  property("cata0") = Prop { (zero cata toInt) == 0 }
+  property("cata3") = Prop { (three cata toInt) == 3 }
 
   val fromInt: Coalgebra[F, Int] = (n: Int) => {
     require { n >= 0 }
@@ -73,18 +76,20 @@ def test[F[+_]](fi: FInitial[F]): Unit = {
     else          s(n - 1)
   }
 
-  µ.unfold(0)(fromInt) cata toInt assert_=== 0
-  µ.unfold(7)(fromInt) cata toInt assert_=== 7
+  property("ana0") = Prop { (0 ana[Fix[F]] fromInt cata toInt) == 0 }
+  property("ana7") = Prop { (7 ana[Fix[F]] fromInt cata toInt) == 7 }
 
-  val plus: µ[F] => Algebra[F, µ[F]] = m => out(_) match {
+  val plus: Fix[F] => Algebra[F, Fix[F]] = m => out(_) match {
     case None    => m
     case Some(n) => succ(n)
   }
-  zero  cata plus(zero)  cata toInt assert_=== 0
-  zero  cata plus(three) cata toInt assert_=== 3
-  three cata plus(zero)  cata toInt assert_=== 3
-  two   cata plus(three) cata toInt assert_=== 5
+
+  property("plus00") = Prop { (zero  cata plus(zero)  cata toInt) == 0 }
+  property("plus03") = Prop { (zero  cata plus(three) cata toInt) == 3 }
+  property("plus30") = Prop { (three cata plus(zero)  cata toInt) == 3 }
+  property("plus23") = Prop { (two   cata plus(three) cata toInt) == 5 }
 }
+
 
 /**
  * Initial algebra for the `Option` endofunctor.
@@ -105,7 +110,7 @@ object NatFWrapper {
   sealed trait NatF[+A]
   case object Zero extends NatF[Nothing]
   case class Succ[+A](n: A) extends NatF[A]
-  object C extends FInitial[NatF] {
+  object NatFC extends FInitial[NatF] {
     override val z = Zero
     override def s[A] = Succ(_)
     override def out[A] = {
@@ -116,7 +121,5 @@ object NatFWrapper {
 }
 
 // now testing both functor choices using the same code :D
-test(NatFWrapper.C)
-test(OptionC)
-
-println("■")
+object OptionCTest extends FInitialTest(OptionC)
+object NatFCTest extends FInitialTest(NatFWrapper.NatFC)
