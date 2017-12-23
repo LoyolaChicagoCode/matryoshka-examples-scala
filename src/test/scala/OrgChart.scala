@@ -1,6 +1,6 @@
 package edu.luc.cs.cs372.matryoshka
 
-import scalaz.{ Bifunctor, Equal, Functor } // basic typeclasses
+import scalaz.{Bifunctor, Equal, Functor} // basic typeclasses
 import scalaz.std.anyVal._ // declares basic types as instances of the basic typeclasses
 import scalaz.std.string._ // declares strings as instances of the basic typeclasses
 import scalaz.std.list._ // declares lists as instances of the basic typeclasses
@@ -9,7 +9,7 @@ import scalaz.syntax.apply._
 
 import scalaz.scalacheck.ScalaCheckBinding._
 import scalaz.scalacheck.ScalazProperties._
-import org.scalacheck.{ Arbitrary, Gen, Prop, Properties }
+import org.scalacheck.{Arbitrary, Gen, Prop, Properties}
 import Arbitrary._
 
 import matryoshka._
@@ -18,21 +18,21 @@ import matryoshka.data.Fix
 import matryoshka.scalacheck.arbitrary._
 
 /**
- * Generic org chart as initial algebra of a `List`-based bifunctor
- * in the category Scala types.
- * {{{
- * data NodeF[A, B] = P(A) | OU(A, B*)
- * }}}
- * (This is largely equivalent to rose trees.)
- */
+  * Generic org chart as initial algebra of a `List`-based bifunctor
+  * in the category Scala types.
+  * {{{
+  * data NodeF[A, B] = P(A) | OU(A, B*)
+  * }}}
+  * (This is largely equivalent to rose trees.)
+  */
 object OrgChart extends Properties("OrgChart") {
 
   /**
-   * A node in an org chart.
-   *
-   * @tparam H the head (item) type
-   * @tparam T the type of the zero or more children (tails) of the list
-   */
+    * A node in an org chart.
+    *
+    * @tparam H the head (item) type
+    * @tparam T the type of the zero or more children (tails) of the list
+    */
   case class NodeF[H, T](item: H, children: List[T])
 
   implicit def nodeFArbitraryD[H](implicit c: Arbitrary[H]) = new Delay[Arbitrary, NodeF[H, ?]] {
@@ -62,12 +62,12 @@ object OrgChart extends Properties("OrgChart") {
   include(functor.laws[NodeF[Unit, ?]], "functorNodeF.")
 
   /**
-   * Least fixpoint of `NodeF` in its second argument `T`
-   * as generic carrier object for initial algebra.
-   * (recursive type based on `NodeF`).
-   *
-   * @tparam H generic item type of the resulting carrier object
-   */
+    * Least fixpoint of `NodeF` in its second argument `T`
+    * as generic carrier object for initial algebra.
+    * (recursive type based on `NodeF`).
+    *
+    * @tparam H generic item type of the resulting carrier object
+    */
   type Node[H] = Fix[NodeF[H, ?]]
 
   // FIXME figure out why this gets stuck
