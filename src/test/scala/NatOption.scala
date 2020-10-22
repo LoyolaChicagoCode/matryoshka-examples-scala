@@ -1,4 +1,4 @@
-package edu.luc.cs.cs372.matryoshka
+package edu.luc.cs.cs371.matryoshka
 
 import scalaz.Equal
 import scalaz.std.option._ // declares option as an instance of the basic typeclasses

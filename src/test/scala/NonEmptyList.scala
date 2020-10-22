@@ -1,4 +1,4 @@
-package edu.luc.cs.cs372.matryoshka
+package edu.luc.cs.cs371.matryoshka
 
 import scalaz.{ Bifunctor, Equal, Functor } // basic typeclasses
 import scalaz.std.anyVal._ // declares basic types as instances of the basic typeclasses
