@@ -2,7 +2,7 @@ name := "matryoshka-examples-scala"
 
 version := "0.2"
 
-scalaVersion := "2.12.12"
+scalaVersion := "2.12.16"
 
 scalacOptions ++= Seq(
   "-deprecation",
@@ -12,7 +12,7 @@ scalacOptions ++= Seq(
   "-Ypartial-unification"
 )
 
-addCompilerPlugin("org.typelevel" % "kind-projector_2.12.12" % "0.11.0")
+addCompilerPlugin("org.typelevel" % "kind-projector_2.12.16" % "0.11.0")
 
 libraryDependencies ++= Seq(
   "org.scalaz"     %% "scalaz-core"           % "7.3.2",
