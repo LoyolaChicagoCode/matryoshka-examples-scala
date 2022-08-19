@@ -12,11 +12,11 @@ scalacOptions ++= Seq(
   "-Ypartial-unification"
 )
 
-addCompilerPlugin("org.typelevel" % "kind-projector_2.12.16" % "0.11.0")
+addCompilerPlugin("org.typelevel" % "kind-projector_2.12.16" % "0.13.2")
 
 libraryDependencies ++= Seq(
-  "org.scalaz"     %% "scalaz-core"           % "7.3.2",
+  "org.scalaz"     %% "scalaz-core"           % "7.3.6",
   "com.slamdata"   %% "matryoshka-core"       % "0.21.3",
-  "org.scalaz"     %% "scalaz-scalacheck-binding" % "7.3.2" % Test,
+  "org.scalaz"     %% "scalaz-scalacheck-binding" % "7.3.6" % Test,
   "com.slamdata"   %% "matryoshka-scalacheck"     % "0.21.3" % Test
 )
